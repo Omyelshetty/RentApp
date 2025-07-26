@@ -1,5 +1,5 @@
 // models/RentPayment.js
-const mongoose = require('mongoose');
+import mongoose from 'mongoose';
 
 const rentPaymentSchema = new mongoose.Schema({
     tenantId: {
@@ -34,4 +34,5 @@ rentPaymentSchema.pre('save', function (next) {
     next();
 });
 
-module.exports = mongoose.model('RentPayment', rentPaymentSchema);
+const RentPayment = mongoose.model('RentPayment', rentPaymentSchema);
+export default RentPayment;

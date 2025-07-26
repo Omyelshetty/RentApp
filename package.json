@@ -7,6 +7,8 @@
     "tailwindcss": "^4.1.11"
   },
   "dependencies": {
+    "dotenv": "^17.2.1",
+    "jsonwebtoken": "^9.0.2",
     "lucide-react": "^0.525.0",
     "react-router-dom": "^7.7.0"
   }

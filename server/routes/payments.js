@@ -1,44 +1,63 @@
-const express = require('express');
+import express from 'express';
+import PDFDocument from 'pdfkit';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import RentPayment from '../models/RentPayment.js';
+import Tenant from '../models/Tenant.js';
+import { authenticateToken, isAdmin } from '../middleware/authMiddleware.js';
+
 const router = express.Router();
-const PDFDocument = require('pdfkit');
-const fs = require('fs');
-const path = require('path');
 
-const RentPayment = require('../models/RentPayment');
-const Tenant = require('../models/Tenant');
+// For resolving __dirname in ES modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
-// POST /api/payments - Add rent payment and generate receipt
-router.post('/', async (req, res) => {
+// Ensure receipts directory exists
+const receiptDir = path.join(__dirname, '../pdf');
+if (!fs.existsSync(receiptDir)) {
+    fs.mkdirSync(receiptDir);
+}
+
+// ✅ POST /api/payments - Add rent payment and generate receipt (admin only)
+router.post('/', authenticateToken, isAdmin, async (req, res) => {
     try {
         const { tenantId, amount, month, paymentMethod } = req.body;
 
+        // Check if tenant exists
         const tenant = await Tenant.findById(tenantId);
         if (!tenant) {
             return res.status(404).json({ message: 'Tenant not found' });
+        }
+
+        // Optional: Check if payment already made for the month
+        const existingPayment = await RentPayment.findOne({ tenantId, month });
+        if (existingPayment) {
+            return res.status(400).json({ message: 'Payment already recorded for this month.' });
         }
 
         // Save payment
         const payment = new RentPayment({
             tenantId,
             amount,
-            month,
-            paymentMethod,
-            date: new Date()
+            paymentMode: paymentMethod,
+            paymentDate: new Date(),
+            month
         });
 
         const savedPayment = await payment.save();
 
         // Generate receipt
         const doc = new PDFDocument();
-        const receiptName = `RECEIPT-${tenant.name}-${month}-${Date.now()}.pdf`.replace(/\s+/g, '_');
-        const receiptPath = path.join(__dirname, '../pdf', receiptName);
+        const receiptName = `${savedPayment.receiptId}.pdf`;
+        const receiptPath = path.join(receiptDir, receiptName);
         const writeStream = fs.createWriteStream(receiptPath);
         doc.pipe(writeStream);
 
         // PDF content
         doc.fontSize(20).text('🏠 Rent Payment Receipt', { align: 'center' });
         doc.moveDown();
-        doc.fontSize(12).text(`Receipt No: ${savedPayment._id}`);
+        doc.fontSize(12).text(`Receipt No: ${savedPayment.receiptId}`);
         doc.text(`Date: ${new Date().toLocaleDateString()}`);
         doc.text(`Tenant Name: ${tenant.name}`);
         doc.text(`House Address: ${tenant.houseAddress}`);
@@ -48,12 +67,13 @@ router.post('/', async (req, res) => {
         doc.text(`Payment Method: ${paymentMethod}`);
         doc.end();
 
+        // Send response after PDF is written
         writeStream.on('finish', () => {
             const receiptUrl = `http://localhost:5000/receipts/${receiptName}`;
             res.status(201).json({
                 message: 'Payment recorded and receipt generated',
                 receiptUrl,
-                payment: savedPayment
+                payment: savedPayment,
             });
         });
     } catch (error) {
@@ -62,4 +82,4 @@ router.post('/', async (req, res) => {
     }
 });
 
-module.exports = router;
+export default router;
