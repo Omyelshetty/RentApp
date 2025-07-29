@@ -208,4 +208,20 @@ router.get('/payments', authenticateToken, isAdmin, async (req, res) => {
     }
 });
 
+// ✅ Recent Activity for Admin Dashboard
+router.get('/recent-activity', authenticateToken, isAdmin, async (req, res) => {
+    try {
+        const recentPayments = await RentPayment.find()
+            .populate('tenantId', 'firstName lastName apartmentNumber')
+            .sort({ createdAt: -1 })
+            .limit(5);
+        const recentTenants = await Tenant.find()
+            .sort({ createdAt: -1 })
+            .limit(5);
+        res.status(200).json({ recentPayments, recentTenants });
+    } catch (err) {
+        res.status(500).json({ message: 'Server error' });
+    }
+});
+
 export default router; 

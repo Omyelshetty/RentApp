@@ -2,15 +2,29 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 
+const loadRazorpayScript = () => {
+    return new Promise((resolve) => {
+        if (window.Razorpay) return resolve(true);
+        const script = document.createElement('script');
+        script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+        script.onload = () => resolve(true);
+        script.onerror = () => resolve(false);
+        document.body.appendChild(script);
+    });
+};
+
 const UserDashboard = () => {
     const navigate = useNavigate();
     const [userData, setUserData] = useState(null);
     const [paymentHistory, setPaymentHistory] = useState([]);
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState('overview');
+    const [tenantData, setTenantData] = useState(null);
+    const [receiptUrl, setReceiptUrl] = useState(null);
 
     useEffect(() => {
         fetchUserData();
+        fetchTenantData();
         fetchPaymentHistory();
     }, []);
 
@@ -29,6 +43,23 @@ const UserDashboard = () => {
             }
         } catch (error) {
             console.error('Error fetching user data:', error);
+        }
+    };
+
+    const fetchTenantData = async () => {
+        try {
+            const token = localStorage.getItem('token');
+            const response = await fetch('http://localhost:5000/api/tenants/user', {
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+            if (response.ok) {
+                const data = await response.json();
+                setTenantData(data);
+            }
+        } catch (error) {
+            setTenantData(null);
         }
     };
 
@@ -112,6 +143,71 @@ const UserDashboard = () => {
         );
     };
 
+    const handlePayNow = async () => {
+        if (!tenantData) return;
+        const res = await loadRazorpayScript();
+        if (!res) {
+            alert('Razorpay SDK failed to load.');
+            return;
+        }
+        const token = localStorage.getItem('token');
+        // 1. Create Razorpay order
+        const orderRes = await fetch('http://localhost:5000/api/payments/razorpay/order', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ amount: tenantData.rentAmount })
+        });
+        const order = await orderRes.json();
+        if (!order.id) {
+            alert('Failed to create payment order');
+            return;
+        }
+        // 2. Open Razorpay checkout
+        const options = {
+            key: 'rzp_test_xxxxxxxx', // Replace with your Razorpay key
+            amount: order.amount,
+            currency: order.currency,
+            name: 'Rent Payment',
+            description: 'Monthly Rent',
+            order_id: order.id,
+            handler: async function (response) {
+                // 3. Verify payment and record in backend
+                const verifyRes = await fetch('http://localhost:5000/api/payments/razorpay/verify', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({
+                        razorpay_order_id: response.razorpay_order_id,
+                        razorpay_payment_id: response.razorpay_payment_id,
+                        razorpay_signature: response.razorpay_signature,
+                        amount: tenantData.rentAmount
+                    })
+                });
+                const verifyData = await verifyRes.json();
+                if (verifyRes.ok) {
+                    alert('Payment successful!');
+                    setReceiptUrl(verifyData.receiptUrl);
+                    fetchPaymentHistory();
+                } else {
+                    alert(verifyData.message || 'Payment verification failed');
+                }
+            },
+            prefill: {
+                name: tenantData.firstName + ' ' + tenantData.lastName,
+                email: tenantData.email,
+                contact: tenantData.phone
+            },
+            theme: { color: '#1976d2' }
+        };
+        const rzp = new window.Razorpay(options);
+        rzp.open();
+    };
+
     if (loading) {
         return (
             <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -155,8 +251,8 @@ const UserDashboard = () => {
                             <button
                                 onClick={() => setActiveTab('overview')}
                                 className={`py-4 px-1 border-b-2 font-medium text-sm ${activeTab === 'overview'
-                                        ? 'border-blue-500 text-blue-600'
-                                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                                    ? 'border-blue-500 text-blue-600'
+                                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                                     }`}
                             >
                                 Overview
@@ -164,8 +260,8 @@ const UserDashboard = () => {
                             <button
                                 onClick={() => setActiveTab('payments')}
                                 className={`py-4 px-1 border-b-2 font-medium text-sm ${activeTab === 'payments'
-                                        ? 'border-blue-500 text-blue-600'
-                                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                                    ? 'border-blue-500 text-blue-600'
+                                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                                     }`}
                             >
                                 Payment History
@@ -173,8 +269,8 @@ const UserDashboard = () => {
                             <button
                                 onClick={() => setActiveTab('profile')}
                                 className={`py-4 px-1 border-b-2 font-medium text-sm ${activeTab === 'profile'
-                                        ? 'border-blue-500 text-blue-600'
-                                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                                    ? 'border-blue-500 text-blue-600'
+                                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                                     }`}
                             >
                                 Profile
@@ -234,9 +330,22 @@ const UserDashboard = () => {
                                         </div>
                                         <div className="ml-4">
                                             <p className="text-sm font-medium text-gray-600">Monthly Rent</p>
-                                            <p className="text-2xl font-semibold text-gray-900">₹15,000</p>
+                                            <p className="text-2xl font-semibold text-gray-900">{tenantData ? formatCurrency(tenantData.rentAmount) : '-'}</p>
+                                        </div>
+                                        <div className="ml-auto">
+                                            <button
+                                                onClick={handlePayNow}
+                                                className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+                                            >
+                                                Pay Now
+                                            </button>
                                         </div>
                                     </div>
+                                    {receiptUrl && (
+                                        <div className="mt-4">
+                                            <a href={receiptUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">Download PDF Receipt</a>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
 

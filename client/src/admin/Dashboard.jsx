@@ -10,16 +10,51 @@ const Dashboard = () => {
         pendingPayments: 0,
         totalRevenue: 0
     });
+    const [recentActivity, setRecentActivity] = useState({ recentPayments: [], recentTenants: [] });
 
     // Mock data - replace with actual API calls
     useEffect(() => {
-        // Simulate loading stats
-        setStats({
-            totalTenants: 12,
-            activePayments: 8,
-            pendingPayments: 3,
-            totalRevenue: 45000
-        });
+        const fetchStats = async () => {
+            try {
+                const token = localStorage.getItem('token');
+                const response = await fetch('http://localhost:5000/api/reports', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                if (response.ok) {
+                    const data = await response.json();
+                    setStats({
+                        totalTenants: data.totalTenants,
+                        activePayments: data.activePayments,
+                        pendingPayments: data.pendingPayments,
+                        totalRevenue: data.totalRevenue
+                    });
+                }
+            } catch (error) {
+                // fallback to 0s
+                setStats({ totalTenants: 0, activePayments: 0, pendingPayments: 0, totalRevenue: 0 });
+            }
+        };
+        fetchStats();
+
+        const fetchRecentActivity = async () => {
+            try {
+                const token = localStorage.getItem('token');
+                const response = await fetch('http://localhost:5000/api/reports/recent-activity', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                if (response.ok) {
+                    const data = await response.json();
+                    setRecentActivity(data);
+                }
+            } catch (error) {
+                setRecentActivity({ recentPayments: [], recentTenants: [] });
+            }
+        };
+        fetchRecentActivity();
     }, []);
 
     const handleNavigation = (path) => {
@@ -244,9 +279,12 @@ const Dashboard = () => {
                     <div className="px-6 py-4 border-b border-gray-200">
                         <h2 className="text-lg font-semibold text-gray-900">Recent Activity</h2>
                     </div>
-                    <div className="p-6">
-                        <div className="space-y-4">
-                            <div className="flex items-center space-x-3">
+                    <div className="p-6 space-y-4">
+                        {recentActivity.recentPayments.length === 0 && recentActivity.recentTenants.length === 0 && (
+                            <div className="text-gray-500">No recent activity</div>
+                        )}
+                        {recentActivity.recentPayments.map(payment => (
+                            <div key={payment._id} className="flex items-center space-x-3">
                                 <div className="flex-shrink-0">
                                     <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
                                         <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -255,11 +293,17 @@ const Dashboard = () => {
                                     </div>
                                 </div>
                                 <div className="flex-1 min-w-0">
-                                    <p className="text-sm font-medium text-gray-900">Payment received from John Doe</p>
-                                    <p className="text-sm text-gray-500">₹12,000 - 2 hours ago</p>
+                                    <p className="text-sm font-medium text-gray-900">
+                                        Payment received from {payment.tenantId?.firstName} {payment.tenantId?.lastName} ({payment.tenantId?.apartmentNumber})
+                                    </p>
+                                    <p className="text-sm text-gray-500">
+                                        {formatCurrency(payment.amount)} - {new Date(payment.paymentDate).toLocaleDateString()}
+                                    </p>
                                 </div>
                             </div>
-                            <div className="flex items-center space-x-3">
+                        ))}
+                        {recentActivity.recentTenants.map(tenant => (
+                            <div key={tenant._id} className="flex items-center space-x-3">
                                 <div className="flex-shrink-0">
                                     <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
                                         <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -268,24 +312,15 @@ const Dashboard = () => {
                                     </div>
                                 </div>
                                 <div className="flex-1 min-w-0">
-                                    <p className="text-sm font-medium text-gray-900">New tenant registered: Jane Smith</p>
-                                    <p className="text-sm text-gray-500">5 hours ago</p>
+                                    <p className="text-sm font-medium text-gray-900">
+                                        New tenant registered: {tenant.firstName} {tenant.lastName} ({tenant.apartmentNumber})
+                                    </p>
+                                    <p className="text-sm text-gray-500">
+                                        {new Date(tenant.createdAt).toLocaleDateString()}
+                                    </p>
                                 </div>
                             </div>
-                            <div className="flex items-center space-x-3">
-                                <div className="flex-shrink-0">
-                                    <div className="w-8 h-8 bg-yellow-100 rounded-full flex items-center justify-center">
-                                        <svg className="w-4 h-4 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                        </svg>
-                                    </div>
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                    <p className="text-sm font-medium text-gray-900">Payment overdue: Mike Johnson</p>
-                                    <p className="text-sm text-gray-500">1 day ago</p>
-                                </div>
-                            </div>
-                        </div>
+                        ))}
                     </div>
                 </div>
             </div>

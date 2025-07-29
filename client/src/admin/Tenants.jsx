@@ -8,6 +8,8 @@ const Tenants = () => {
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [filterStatus, setFilterStatus] = useState('all');
+    const [editTenant, setEditTenant] = useState(null);
+    const [editForm, setEditForm] = useState(null);
 
     useEffect(() => {
         fetchTenants();
@@ -56,6 +58,50 @@ const Tenants = () => {
                 console.error('Error deleting tenant:', error);
                 alert('An error occurred while deleting the tenant');
             }
+        }
+    };
+
+    const handleEditClick = (tenant) => {
+        setEditTenant(tenant);
+        setEditForm({ ...tenant });
+    };
+    const handleEditChange = (e) => {
+        const { name, value } = e.target;
+        if (name.includes('.')) {
+            const [parent, child] = name.split('.');
+            setEditForm(prev => ({
+                ...prev,
+                [parent]: {
+                    ...prev[parent],
+                    [child]: value
+                }
+            }));
+        } else {
+            setEditForm(prev => ({ ...prev, [name]: value }));
+        }
+    };
+    const handleEditSave = async () => {
+        try {
+            const token = localStorage.getItem('token');
+            const response = await fetch(`http://localhost:5000/api/tenants/${editTenant._id}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify(editForm)
+            });
+            if (response.ok) {
+                alert('Tenant updated successfully!');
+                setEditTenant(null);
+                setEditForm(null);
+                fetchTenants();
+            } else {
+                const data = await response.json();
+                alert(data.message || 'Failed to update tenant');
+            }
+        } catch (error) {
+            alert('An error occurred while updating the tenant');
         }
     };
 
@@ -248,7 +294,7 @@ const Tenants = () => {
                                             <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                                                 <div className="flex space-x-2">
                                                     <button
-                                                        onClick={() => navigate(`/admin/tenants/${tenant._id}/edit`)}
+                                                        onClick={() => handleEditClick(tenant)}
                                                         className="text-blue-600 hover:text-blue-900"
                                                     >
                                                         Edit
@@ -269,6 +315,68 @@ const Tenants = () => {
                     </div>
                 </div>
             </div>
+            {/* Edit Tenant Modal */}
+            {editTenant && (
+                <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50">
+                    <div className="bg-white rounded-lg shadow-lg p-8 w-full max-w-2xl">
+                        <h2 className="text-xl font-bold mb-4">Edit Tenant</h2>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">First Name</label>
+                                <input type="text" name="firstName" value={editForm.firstName} onChange={handleEditChange} className="w-full px-3 py-2 border border-gray-300 rounded-md" />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Last Name</label>
+                                <input type="text" name="lastName" value={editForm.lastName} onChange={handleEditChange} className="w-full px-3 py-2 border border-gray-300 rounded-md" />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                                <input type="email" name="email" value={editForm.email} onChange={handleEditChange} className="w-full px-3 py-2 border border-gray-300 rounded-md" />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
+                                <input type="text" name="phone" value={editForm.phone} onChange={handleEditChange} className="w-full px-3 py-2 border border-gray-300 rounded-md" />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Apartment/House Number</label>
+                                <input type="text" name="apartmentNumber" value={editForm.apartmentNumber} onChange={handleEditChange} className="w-full px-3 py-2 border border-gray-300 rounded-md" />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Monthly Rent (₹)</label>
+                                <input type="number" name="rentAmount" value={editForm.rentAmount} onChange={handleEditChange} className="w-full px-3 py-2 border border-gray-300 rounded-md" />
+                            </div>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Emergency Contact Name</label>
+                                <input type="text" name="emergencyContact.name" value={editForm.emergencyContact?.name || ''} onChange={handleEditChange} className="w-full px-3 py-2 border border-gray-300 rounded-md" />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Emergency Contact Phone</label>
+                                <input type="text" name="emergencyContact.phone" value={editForm.emergencyContact?.phone || ''} onChange={handleEditChange} className="w-full px-3 py-2 border border-gray-300 rounded-md" />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Relationship</label>
+                                <input type="text" name="emergencyContact.relationship" value={editForm.emergencyContact?.relationship || ''} onChange={handleEditChange} className="w-full px-3 py-2 border border-gray-300 rounded-md" />
+                            </div>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">ID Proof</label>
+                                <input type="text" name="documents.idProof" value={editForm.documents?.idProof || ''} onChange={handleEditChange} className="w-full px-3 py-2 border border-gray-300 rounded-md" />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Other Documents</label>
+                                <input type="text" name="documents.otherDocuments" value={editForm.documents?.otherDocuments || ''} onChange={handleEditChange} className="w-full px-3 py-2 border border-gray-300 rounded-md" />
+                            </div>
+                        </div>
+                        <div className="flex justify-end space-x-4">
+                            <button onClick={() => { setEditTenant(null); setEditForm(null); }} className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50">Cancel</button>
+                            <button onClick={handleEditSave} className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">Save</button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
