@@ -1,26 +1,61 @@
-const mongoose = require('mongoose');
-const bcrypt = require('bcryptjs');
-const User = require('./models/User');
+import mongoose from 'mongoose';
+import bcrypt from 'bcryptjs';
+import User from './models/User.js';
 
-mongoose.connect('mongodb://127.0.0.1:27017/rentdb')
-    .then(async () => {
-        const existingAdmin = await User.findOne({ username: 'admin' });
+// MongoDB connection
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/rentapp';
 
-        if (!existingAdmin) {
-            const hashedPassword = await bcrypt.hash('admin123', 10);
+async function seedDatabase() {
+    try {
+        // Connect to MongoDB
+        await mongoose.connect(MONGODB_URI);
+        console.log('✅ Connected to MongoDB');
 
-            const admin = new User({
-                username: 'admin',
-                password: hashedPassword,
-                role: 'admin',
-            });
+        // Clear existing users
+        await User.deleteMany({});
+        console.log('🗑️ Cleared existing users');
 
-            await admin.save();
-            console.log('✅ Admin user created');
-        } else {
-            console.log('ℹ️ Admin user already exists');
-        }
+        // Hash passwords
+        const adminPassword = await bcrypt.hash('admin123', 10);
+        const userPassword = await bcrypt.hash('user123', 10);
 
-        mongoose.disconnect();
-    })
-    .catch(err => console.error('❌ MongoDB connection error:', err));
+        // Create admin user
+        const adminUser = new User({
+            name: 'Admin User',
+            email: 'admin@rentapp.com',
+            password: adminPassword,
+            role: 'admin',
+            phone: '+91 9876543210',
+            address: 'Admin Address, City, State'
+        });
+
+        // Create regular user
+        const regularUser = new User({
+            name: 'John Doe',
+            email: 'user@rentapp.com',
+            password: userPassword,
+            role: 'user',
+            phone: '+91 9876543211',
+            address: 'Tenant Address, City, State'
+        });
+
+        // Save users
+        await adminUser.save();
+        await regularUser.save();
+
+        console.log('✅ Database seeded successfully!');
+        console.log('📧 Admin Account: admin@rentapp.com / admin123');
+        console.log('📧 User Account: user@rentapp.com / user123');
+
+        // Disconnect from MongoDB
+        await mongoose.disconnect();
+        console.log('✅ Disconnected from MongoDB');
+
+    } catch (error) {
+        console.error('❌ Error seeding database:', error);
+        process.exit(1);
+    }
+}
+
+// Run the seed function
+seedDatabase();

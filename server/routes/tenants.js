@@ -7,9 +7,47 @@ const router = express.Router();
 // ✅ Add new tenant (admin only)
 router.post('/', authenticateToken, isAdmin, async (req, res) => {
     try {
-        const { name, houseAddress, phone } = req.body;
+        const {
+            firstName,
+            lastName,
+            email,
+            phone,
+            apartmentNumber,
+            rentAmount,
+            emergencyContact,
+            documents,
+            status = 'active'
+        } = req.body;
 
-        const tenant = new Tenant({ name, houseAddress, phone });
+        // Validate required fields
+        if (!firstName || !lastName || !email || !apartmentNumber || !rentAmount) {
+            return res.status(400).json({ message: 'Missing required fields' });
+        }
+
+        // Check if tenant already exists with same email or apartment
+        const existingTenant = await Tenant.findOne({
+            $or: [
+                { email: email },
+                { apartmentNumber: apartmentNumber }
+            ]
+        });
+
+        if (existingTenant) {
+            return res.status(400).json({ message: 'Tenant with this email or apartment number already exists' });
+        }
+
+        const tenant = new Tenant({
+            firstName,
+            lastName,
+            email,
+            phone,
+            apartmentNumber,
+            rentAmount,
+            emergencyContact,
+            documents,
+            status
+        });
+
         const savedTenant = await tenant.save();
 
         res.status(201).json(savedTenant);
@@ -22,7 +60,7 @@ router.post('/', authenticateToken, isAdmin, async (req, res) => {
 // ✅ Get all tenants (admin only)
 router.get('/', authenticateToken, isAdmin, async (req, res) => {
     try {
-        const tenants = await Tenant.find();
+        const tenants = await Tenant.find().sort({ createdAt: -1 });
         res.status(200).json(tenants);
     } catch (err) {
         console.error('Error fetching tenants:', err);
@@ -30,10 +68,33 @@ router.get('/', authenticateToken, isAdmin, async (req, res) => {
     }
 });
 
+// ✅ Get single tenant (admin only)
+router.get('/:id', authenticateToken, isAdmin, async (req, res) => {
+    try {
+        const tenant = await Tenant.findById(req.params.id);
+        if (!tenant) {
+            return res.status(404).json({ message: 'Tenant not found' });
+        }
+        res.status(200).json(tenant);
+    } catch (err) {
+        console.error('Error fetching tenant:', err);
+        res.status(500).json({ message: 'Server error' });
+    }
+});
+
 // ✅ Update tenant (admin only)
 router.put('/:id', authenticateToken, isAdmin, async (req, res) => {
     try {
-        const updated = await Tenant.findByIdAndUpdate(req.params.id, req.body, { new: true });
+        const updated = await Tenant.findByIdAndUpdate(
+            req.params.id,
+            req.body,
+            { new: true, runValidators: true }
+        );
+
+        if (!updated) {
+            return res.status(404).json({ message: 'Tenant not found' });
+        }
+
         res.status(200).json(updated);
     } catch (err) {
         console.error('Error updating tenant:', err);
@@ -44,7 +105,12 @@ router.put('/:id', authenticateToken, isAdmin, async (req, res) => {
 // ✅ Delete tenant (admin only)
 router.delete('/:id', authenticateToken, isAdmin, async (req, res) => {
     try {
-        await Tenant.findByIdAndDelete(req.params.id);
+        const deleted = await Tenant.findByIdAndDelete(req.params.id);
+
+        if (!deleted) {
+            return res.status(404).json({ message: 'Tenant not found' });
+        }
+
         res.status(200).json({ message: 'Tenant deleted successfully' });
     } catch (err) {
         console.error('Error deleting tenant:', err);
