@@ -1,0 +1,5 @@
+# Ignore dependencies and environment files
+client/node_modules/
+client/.cache/
+server/.env
+
