@@ -15,14 +15,8 @@ const AddTenant = () => {
         apartmentNumber: '',
         rentAmount: '',
         propertyId: '',
-        emergencyContact: {
-            name: '',
-            phone: '',
-            relationship: ''
-        },
         documents: {
-            idProof: '',
-            otherDocuments: ''
+            idProof: ''
         }
     });
 
@@ -334,58 +328,13 @@ const AddTenant = () => {
                                 </div>
                             </div>
                         </div>
-                        {/* Emergency Contact */}
-                        <div>
-                            <h3 className="text-md font-medium text-gray-900 mb-4">Emergency Contact</h3>
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                                        Contact Name
-                                    </label>
-                                    <input
-                                        type="text"
-                                        name="emergencyContact.name"
-                                        value={formData.emergencyContact.name}
-                                        onChange={handleChange}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                        placeholder="Emergency contact name"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                                        Contact Phone
-                                    </label>
-                                    <input
-                                        type="tel"
-                                        name="emergencyContact.phone"
-                                        value={formData.emergencyContact.phone}
-                                        onChange={handleChange}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                        placeholder="Emergency contact phone"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                                        Relationship
-                                    </label>
-                                    <input
-                                        type="text"
-                                        name="emergencyContact.relationship"
-                                        value={formData.emergencyContact.relationship}
-                                        onChange={handleChange}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                        placeholder="e.g., Spouse, Parent, Friend"
-                                    />
-                                </div>
-                            </div>
-                        </div>
                         {/* Document Information */}
                         <div>
                             <h3 className="text-md font-medium text-gray-900 mb-4">Document Information</h3>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                                        ID Proof Number
+                                        ID Proof Number (Optional)
                                     </label>
                                     <input
                                         type="text"
@@ -393,20 +342,7 @@ const AddTenant = () => {
                                         value={formData.documents.idProof}
                                         onChange={handleChange}
                                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                        placeholder="Aadhar, PAN, Driving License, etc."
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                                        Other Documents
-                                    </label>
-                                    <input
-                                        type="text"
-                                        name="documents.otherDocuments"
-                                        value={formData.documents.otherDocuments}
-                                        onChange={handleChange}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                        placeholder="Additional documents"
+                                        placeholder="Aadhar, PAN, Driving License, etc. (Optional)"
                                     />
                                 </div>
                             </div>

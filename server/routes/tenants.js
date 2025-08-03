@@ -2,12 +2,21 @@ import express from 'express';
 import Tenant from '../models/Tenant.js';
 import User from '../models/User.js';
 import { authenticateToken, isAdmin } from '../middleware/authMiddleware.js';
+import mongoose from 'mongoose'; // Added for database connection check
 
 const router = express.Router();
 
 // ✅ Add new tenant (admin only)
 router.post('/', authenticateToken, isAdmin, async (req, res) => {
     try {
+        // Check if database is connected
+        if (mongoose.connection.readyState !== 1) {
+            console.error('Database not connected. ReadyState:', mongoose.connection.readyState);
+            return res.status(503).json({
+                message: 'Database connection unavailable. Please try again in a few moments.'
+            });
+        }
+
         const {
             firstName,
             lastName,
@@ -16,7 +25,6 @@ router.post('/', authenticateToken, isAdmin, async (req, res) => {
             apartmentNumber,
             rentAmount,
             propertyId,
-            emergencyContact,
             documents,
             status = 'active'
         } = req.body;
@@ -50,6 +58,13 @@ router.post('/', authenticateToken, isAdmin, async (req, res) => {
             return res.status(400).json({ message: 'Invalid email format' });
         }
 
+        // Validate documents field if provided
+        if (documents && typeof documents === 'object') {
+            if (documents.idProof && documents.idProof.trim() === '') {
+                documents.idProof = '';
+            }
+        }
+
         // Check if tenant already exists with same email or apartment
         const existingTenant = await Tenant.findOne({
             $or: [
@@ -71,8 +86,9 @@ router.post('/', authenticateToken, isAdmin, async (req, res) => {
             apartmentNumber: apartmentNumber.trim(),
             rentAmount: rentAmountNum,
             propertyId,
-            emergencyContact,
-            documents,
+            documents: {
+                idProof: documents?.idProof?.trim() || ''
+            },
             status
         });
 
@@ -83,19 +99,26 @@ router.post('/', authenticateToken, isAdmin, async (req, res) => {
     } catch (err) {
         console.error('Error adding tenant:', err);
         console.error('Request body:', req.body);
-        
+
         // Handle Mongoose validation errors
         if (err.name === 'ValidationError') {
             const errors = Object.values(err.errors).map(e => e.message);
             return res.status(400).json({ message: 'Validation error', details: errors });
         }
-        
+
         // Handle duplicate key errors
         if (err.code === 11000) {
             const field = Object.keys(err.keyPattern)[0];
             return res.status(400).json({ message: `${field} already exists` });
         }
-        
+
+        // Handle database connection errors
+        if (err.name === 'MongooseServerSelectionError' || err.name === 'MongoNetworkError') {
+            return res.status(503).json({
+                message: 'Database connection error. Please try again in a few moments.'
+            });
+        }
+
         res.status(500).json({ message: 'Server error', details: err.message });
     }
 });
@@ -164,19 +187,19 @@ router.put('/:id', authenticateToken, isAdmin, async (req, res) => {
         res.status(200).json(updated);
     } catch (err) {
         console.error('Error updating tenant:', err);
-        
+
         // Handle Mongoose validation errors
         if (err.name === 'ValidationError') {
             const errors = Object.values(err.errors).map(e => e.message);
             return res.status(400).json({ message: 'Validation error', details: errors });
         }
-        
+
         // Handle duplicate key errors
         if (err.code === 11000) {
             const field = Object.keys(err.keyPattern)[0];
             return res.status(400).json({ message: `${field} already exists` });
         }
-        
+
         res.status(500).json({ message: 'Server error', details: err.message });
     }
 });

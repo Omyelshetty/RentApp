@@ -40,18 +40,19 @@ const tenantSchema = new mongoose.Schema({
         enum: ['active', 'inactive'],
         default: 'active'
     },
-    emergencyContact: {
-        name: { type: String, trim: true },
-        phone: { type: String, trim: true },
-        relationship: { type: String, trim: true }
-    },
     propertyId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Property',
         required: true
     },
     documents: {
-        idProof: { type: String, trim: true }
+        idProof: {
+            type: String,
+            trim: true,
+            required: false,
+            default: '',
+            sparse: true
+        }
     }
 }, {
     timestamps: true
