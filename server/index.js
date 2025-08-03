@@ -8,6 +8,7 @@ import tenantRoutes from './routes/tenants.js';
 import adminRoutes from './routes/admin.js';
 import paymentRoutes from './routes/payments.js';
 import reportsRoutes from './routes/reports.js';
+import ownersRoutes from './routes/owners.js';
 
 dotenv.config();
 
@@ -24,6 +25,7 @@ app.use('/api/tenants', tenantRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/reports', reportsRoutes);
+app.use('/api/owners', ownersRoutes);
 
 // Serve PDF receipts
 app.use('/receipts', express.static('./pdf'));

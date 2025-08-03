@@ -3,7 +3,10 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import User from '../models/User.js';
 import Tenant from '../models/Tenant.js';
+import Property from '../models/Property.js';
+import RentPayment from '../models/RentPayment.js';
 import { verifyToken } from '../middleware/verifyToken.js';
+import { authenticateToken, isAdmin } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 
@@ -39,52 +42,99 @@ router.post('/login', async (req, res) => {
 });
 
 // ---------------------
-// ✅ Register Route (Admin Only)
+// ✅ Public Register Route (No token required)
 // ---------------------
-router.post('/register', verifyToken, async (req, res) => {
-    const admin = req.user;
-    if (admin.role !== 'admin') {
-        return res.status(403).json({ message: 'Access denied. Only admin can register users.' });
-    }
-    const { email, password, name, role, phone, address, apartmentNumber, rentAmount, emergencyContact, documents } = req.body;
+// Comment out or remove the public registration route
+// router.post('/register', async (req, res) => {
+//     const {
+//         firstName,
+//         lastName,
+//         email,
+//         password,
+//         phone,
+//         apartmentNumber,
+//         propertyId,
+//         emergencyContactName,
+//         emergencyContactPhone,
+//         emergencyContactRelationship
+//     } = req.body;
+
+//     try {
+//         // Check if user already exists
+//         const existingUser = await User.findOne({ email });
+//         if (existingUser) {
+//             return res.status(400).json({ message: 'User already exists with this email' });
+//         }
+
+//         // Hash password
+//         const hashedPassword = await bcrypt.hash(password, 10);
+
+//         // Create user
+//         const newUser = new User({
+//             name: `${firstName} ${lastName}`,
+//             email,
+//             password: hashedPassword,
+//             role: 'user',
+//             phone
+//         });
+//         await newUser.save();
+
+//         // Create tenant (assign to selected property)
+//         const tenant = new Tenant({
+//             firstName,
+//             lastName,
+//             email,
+//             phone,
+//             propertyId,
+//             apartmentNumber,
+//             rentAmount: 0, // Admin will set the actual rent amount
+//             emergencyContact: {
+//                 name: emergencyContactName,
+//                 phone: emergencyContactPhone,
+//                 relationship: emergencyContactRelationship
+//             },
+//             status: 'active'
+//         });
+//         await tenant.save();
+
+//         res.status(201).json({ message: 'User registered successfully' });
+//     } catch (err) {
+//         console.error('Registration error:', err);
+//         res.status(500).json({ message: 'Registration failed' });
+//     }
+// });
+
+// GET /api/properties - List all properties for registration dropdown
+router.get('/properties', async (req, res) => {
     try {
-        const existingUser = await User.findOne({ email });
-        if (existingUser) {
-            return res.status(400).json({ message: 'User already exists' });
-        }
-        const hashedPassword = await bcrypt.hash(password, 10);
-        const newUser = new User({
-            name,
-            email,
-            password: hashedPassword,
-            role: role || 'user',
-            phone,
-            address
-        });
-        await newUser.save();
-        // Also create a tenant if not already present
-        let tenant = await Tenant.findOne({ email });
-        if (!tenant) {
-            // Split name into first and last
-            let firstName = name.split(' ')[0];
-            let lastName = name.split(' ').slice(1).join(' ') || '';
-            tenant = new Tenant({
-                firstName,
-                lastName,
-                email,
-                phone: phone || '',
-                apartmentNumber: apartmentNumber || '',
-                rentAmount: rentAmount || 0,
-                emergencyContact: emergencyContact || {},
-                documents: documents || {},
-                status: 'active'
-            });
-            await tenant.save();
-        }
-        res.status(201).json({ message: 'User registered successfully' });
+        const properties = await Property.find({}, '_id propertyName ownerName');
+        res.json({ properties });
     } catch (err) {
-        console.error('Register Error:', err);
-        res.status(500).json({ message: 'Server error' });
+        res.status(500).json({ message: 'Failed to fetch properties' });
+    }
+});
+
+// GET /api/owners/stats - Admin only: get tenant count and total credited per owner
+router.get('/owners/stats', authenticateToken, isAdmin, async (req, res) => {
+    try {
+        // Get all properties (owners)
+        const properties = await Property.find({}, '_id ownerName');
+        // For each property, count tenants and sum payments
+        const stats = await Promise.all(properties.map(async (property) => {
+            const tenantCount = await Tenant.countDocuments({ propertyId: property._id });
+            const totalCredited = await RentPayment.aggregate([
+                { $match: { propertyId: property._id, status: 'paid' } },
+                { $group: { _id: null, total: { $sum: '$amount' } } }
+            ]);
+            return {
+                ownerName: property.ownerName,
+                tenantCount,
+                totalCredited: totalCredited[0]?.total || 0
+            };
+        }));
+        res.json({ stats });
+    } catch (err) {
+        res.status(500).json({ message: 'Failed to fetch owner stats' });
     }
 });
 

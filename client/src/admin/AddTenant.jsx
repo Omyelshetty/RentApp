@@ -1,10 +1,12 @@
 // client/src/admin/AddTenant.jsx
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 const AddTenant = () => {
     const navigate = useNavigate();
     const [loading, setLoading] = useState(false);
+    const [properties, setProperties] = useState([]);
+    const [ownerStats, setOwnerStats] = useState([]);
     const [formData, setFormData] = useState({
         firstName: '',
         lastName: '',
@@ -12,6 +14,7 @@ const AddTenant = () => {
         phone: '',
         apartmentNumber: '',
         rentAmount: '',
+        propertyId: '',
         emergencyContact: {
             name: '',
             phone: '',
@@ -22,6 +25,32 @@ const AddTenant = () => {
             otherDocuments: ''
         }
     });
+
+    useEffect(() => {
+        // Fetch property/owner list
+        fetch('http://localhost:5000/api/auth/properties')
+            .then(res => res.json())
+            .then(data => setProperties(data.properties || []))
+            .catch(error => {
+                console.error('Error fetching properties:', error);
+                setProperties([]);
+            });
+        // Fetch owner stats
+        const token = localStorage.getItem('token');
+        if (token) {
+            fetch('http://localhost:5000/api/auth/owners/stats', {
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            })
+                .then(res => res.json())
+                .then(data => setOwnerStats(data.stats || []))
+                .catch(error => {
+                    console.error('Error fetching owner stats:', error);
+                    setOwnerStats([]);
+                });
+        }
+    }, []);
 
     const handleChange = (e) => {
         const { name, value } = e.target;
@@ -44,10 +73,36 @@ const AddTenant = () => {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        setLoading(true);
 
+        // Client-side validation
+        if (!formData.firstName || !formData.lastName || !formData.email ||
+            !formData.phone || !formData.apartmentNumber || !formData.rentAmount || !formData.propertyId) {
+            alert('Please fill in all required fields');
+            return;
+        }
+
+        // Validate email format
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(formData.email)) {
+            alert('Please enter a valid email address');
+            return;
+        }
+
+        // Validate rent amount
+        if (formData.rentAmount <= 0) {
+            alert('Rent amount must be greater than 0');
+            return;
+        }
+
+        setLoading(true);
         try {
             const token = localStorage.getItem('token');
+            if (!token) {
+                alert('No authentication token found. Please login again.');
+                navigate('/login');
+                return;
+            }
+
             const response = await fetch('http://localhost:5000/api/tenants', {
                 method: 'POST',
                 headers: {
@@ -57,17 +112,35 @@ const AddTenant = () => {
                 body: JSON.stringify(formData)
             });
 
-            const data = await response.json();
-
-            if (response.ok) {
-                alert('Tenant added successfully!');
-                navigate('/admin/tenants');
-            } else {
-                alert(data.message || 'Failed to add tenant');
+            if (!response.ok) {
+                if (response.status === 401) {
+                    alert('Authentication failed. Please login again.');
+                    localStorage.removeItem('token');
+                    localStorage.removeItem('role');
+                    navigate('/login');
+                    return;
+                }
+                const errorText = await response.text();
+                let errorMessage = 'Failed to add tenant';
+                try {
+                    const errorData = JSON.parse(errorText);
+                    errorMessage = errorData.message || errorMessage;
+                    if (errorData.details) {
+                        console.error('Server error details:', errorData.details);
+                    }
+                } catch (parseError) {
+                    console.error('Error parsing response:', errorText);
+                }
+                alert(errorMessage);
+                return;
             }
+
+            const data = await response.json();
+            alert('Tenant added successfully!');
+            navigate('/admin/tenants');
         } catch (error) {
             console.error('Error adding tenant:', error);
-            alert('An error occurred while adding the tenant');
+            alert('An error occurred while adding the tenant. Please try again.');
         } finally {
             setLoading(false);
         }
@@ -108,13 +181,43 @@ const AddTenant = () => {
             </header>
 
             <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                {/* Owner Stats */}
+                <div className="mb-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
+                    <h3 className="font-semibold mb-2 text-blue-900">Owner Stats</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {ownerStats.map(stat => (
+                            <div key={stat.ownerName} className="bg-white rounded shadow p-3">
+                                <div className="font-bold text-gray-800">{stat.ownerName}</div>
+                                <div className="text-sm text-gray-600">Tenants: {stat.tenantCount}</div>
+                                <div className="text-sm text-gray-600">Total Credited: ₹{stat.totalCredited.toLocaleString('en-IN')}</div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
                 <div className="bg-white rounded-lg shadow">
                     <div className="px-6 py-4 border-b border-gray-200">
                         <h2 className="text-lg font-semibold text-gray-900">Tenant Information</h2>
                         <p className="text-sm text-gray-600 mt-1">Fill in the details below to register a new tenant</p>
                     </div>
-
                     <form onSubmit={handleSubmit} className="p-6 space-y-6">
+                        {/* Owner/Property Selection */}
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Property / Owner *</label>
+                            <select
+                                name="propertyId"
+                                value={formData.propertyId}
+                                onChange={handleChange}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                required
+                            >
+                                <option value="">Select property/owner</option>
+                                {properties.map(property => (
+                                    <option key={property._id} value={property._id}>
+                                        {property.propertyName} ({property.ownerName})
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
                         {/* Personal Information */}
                         <div>
                             <h3 className="text-md font-medium text-gray-900 mb-4">Personal Information</h3>
@@ -177,7 +280,6 @@ const AddTenant = () => {
                                 </div>
                             </div>
                         </div>
-
                         {/* Rental Information */}
                         <div>
                             <h3 className="text-md font-medium text-gray-900 mb-4">Rental Information</h3>
@@ -214,7 +316,6 @@ const AddTenant = () => {
                                 </div>
                             </div>
                         </div>
-
                         {/* Emergency Contact */}
                         <div>
                             <h3 className="text-md font-medium text-gray-900 mb-4">Emergency Contact</h3>
@@ -260,7 +361,6 @@ const AddTenant = () => {
                                 </div>
                             </div>
                         </div>
-
                         {/* Document Information */}
                         <div>
                             <h3 className="text-md font-medium text-gray-900 mb-4">Document Information</h3>
@@ -293,7 +393,6 @@ const AddTenant = () => {
                                 </div>
                             </div>
                         </div>
-
                         {/* Submit Buttons */}
                         <div className="flex justify-end space-x-4 pt-6 border-t border-gray-200">
                             <button

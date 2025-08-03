@@ -143,69 +143,8 @@ const UserDashboard = () => {
         );
     };
 
-    const handlePayNow = async () => {
-        if (!tenantData) return;
-        const res = await loadRazorpayScript();
-        if (!res) {
-            alert('Razorpay SDK failed to load.');
-            return;
-        }
-        const token = localStorage.getItem('token');
-        // 1. Create Razorpay order
-        const orderRes = await fetch('http://localhost:5000/api/payments/razorpay/order', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`
-            },
-            body: JSON.stringify({ amount: tenantData.rentAmount })
-        });
-        const order = await orderRes.json();
-        if (!order.id) {
-            alert('Failed to create payment order');
-            return;
-        }
-        // 2. Open Razorpay checkout
-        const options = {
-            key: 'rzp_test_xxxxxxxx', // Replace with your Razorpay key
-            amount: order.amount,
-            currency: order.currency,
-            name: 'Rent Payment',
-            description: 'Monthly Rent',
-            order_id: order.id,
-            handler: async function (response) {
-                // 3. Verify payment and record in backend
-                const verifyRes = await fetch('http://localhost:5000/api/payments/razorpay/verify', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`
-                    },
-                    body: JSON.stringify({
-                        razorpay_order_id: response.razorpay_order_id,
-                        razorpay_payment_id: response.razorpay_payment_id,
-                        razorpay_signature: response.razorpay_signature,
-                        amount: tenantData.rentAmount
-                    })
-                });
-                const verifyData = await verifyRes.json();
-                if (verifyRes.ok) {
-                    alert('Payment successful!');
-                    setReceiptUrl(verifyData.receiptUrl);
-                    fetchPaymentHistory();
-                } else {
-                    alert(verifyData.message || 'Payment verification failed');
-                }
-            },
-            prefill: {
-                name: tenantData.firstName + ' ' + tenantData.lastName,
-                email: tenantData.email,
-                contact: tenantData.phone
-            },
-            theme: { color: '#1976d2' }
-        };
-        const rzp = new window.Razorpay(options);
-        rzp.open();
+    const handlePayNow = () => {
+        navigate('/user/payment-options');
     };
 
     if (loading) {

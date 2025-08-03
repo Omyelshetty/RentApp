@@ -5,6 +5,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import RentPayment from '../models/RentPayment.js';
 import Tenant from '../models/Tenant.js';
+import Property from '../models/Property.js';
 import { authenticateToken, isAdmin } from '../middleware/authMiddleware.js';
 import Razorpay from 'razorpay';
 import crypto from 'crypto';
@@ -93,7 +94,7 @@ router.post('/', authenticateToken, isAdmin, async (req, res) => {
         }
 
         // Check if tenant exists
-        const tenant = await Tenant.findById(tenantId);
+        const tenant = await Tenant.findById(tenantId).populate('propertyId');
         if (!tenant) {
             return res.status(404).json({ message: 'Tenant not found' });
         }
@@ -101,6 +102,7 @@ router.post('/', authenticateToken, isAdmin, async (req, res) => {
         // Save payment
         const payment = new RentPayment({
             tenantId,
+            propertyId: tenant.propertyId._id,
             amount,
             paymentDate: new Date(paymentDate),
             paymentMethod,
@@ -117,19 +119,31 @@ router.post('/', authenticateToken, isAdmin, async (req, res) => {
         const writeStream = fs.createWriteStream(receiptPath);
         doc.pipe(writeStream);
 
-        // PDF content
+        // PDF content with property owner information
         doc.fontSize(20).text('🏠 Rent Payment Receipt', { align: 'center' });
         doc.moveDown();
         doc.fontSize(12).text(`Receipt No: ${savedPayment.receiptId}`);
         doc.text(`Date: ${new Date(paymentDate).toLocaleDateString()}`);
-        doc.text(`Tenant Name: ${tenant.firstName} ${tenant.lastName}`);
-        doc.text(`Property: ${tenant.apartmentNumber}`);
+        doc.moveDown();
+        doc.fontSize(14).text('Tenant Details:', { underline: true });
+        doc.fontSize(12).text(`Name: ${tenant.firstName} ${tenant.lastName}`);
+        doc.text(`Apartment: ${tenant.apartmentNumber}`);
         doc.text(`Phone: ${tenant.phone}`);
-        doc.text(`Amount Paid: ₹${parseInt(amount).toLocaleString('en-IN')}`);
+        doc.moveDown();
+        doc.fontSize(14).text('Property Owner Details:', { underline: true });
+        doc.fontSize(12).text(`Owner Name: ${tenant.propertyId.ownerName}`);
+        doc.text(`Property: ${tenant.propertyId.propertyName}`);
+        doc.text(`Address: ${tenant.propertyId.address}`);
+        doc.moveDown();
+        doc.fontSize(14).text('Payment Details:', { underline: true });
+        doc.fontSize(12).text(`Amount Paid: ₹${parseInt(amount).toLocaleString('en-IN')}`);
         doc.text(`Payment Method: ${paymentMethod.replace('_', ' ').toUpperCase()}`);
+        doc.text(`Month: ${savedPayment.month} ${savedPayment.year}`);
         if (description) {
             doc.text(`Description: ${description}`);
         }
+        doc.moveDown();
+        doc.fontSize(10).text('This is a computer generated receipt.', { align: 'center' });
         doc.end();
 
         // Send response after PDF is written
@@ -143,7 +157,8 @@ router.post('/', authenticateToken, isAdmin, async (req, res) => {
         });
     } catch (error) {
         console.error('Payment error:', error);
-        res.status(500).json({ message: 'Server error' });
+        console.error('Request body:', req.body);
+        res.status(500).json({ message: 'Server error', details: error.message });
     }
 });
 
@@ -226,13 +241,14 @@ router.post('/razorpay/verify', authenticateToken, async (req, res) => {
         }
         // Find tenant by user email
         const userEmail = req.user.email;
-        const tenant = await Tenant.findOne({ email: userEmail });
+        const tenant = await Tenant.findOne({ email: userEmail }).populate('propertyId');
         if (!tenant) {
             return res.status(404).json({ message: 'Tenant not found' });
         }
         // Record payment
         const payment = new RentPayment({
             tenantId: tenant._id,
+            propertyId: tenant.propertyId._id,
             amount,
             paymentDate: new Date(),
             paymentMethod: 'razorpay',
@@ -250,12 +266,24 @@ router.post('/razorpay/verify', authenticateToken, async (req, res) => {
         doc.moveDown();
         doc.fontSize(12).text(`Receipt No: ${savedPayment.receiptId}`);
         doc.text(`Date: ${new Date().toLocaleDateString()}`);
-        doc.text(`Tenant Name: ${tenant.firstName} ${tenant.lastName}`);
-        doc.text(`Property: ${tenant.apartmentNumber}`);
+        doc.moveDown();
+        doc.fontSize(14).text('Tenant Details:', { underline: true });
+        doc.fontSize(12).text(`Name: ${tenant.firstName} ${tenant.lastName}`);
+        doc.text(`Apartment: ${tenant.apartmentNumber}`);
         doc.text(`Phone: ${tenant.phone}`);
-        doc.text(`Amount Paid: ₹${parseInt(amount).toLocaleString('en-IN')}`);
+        doc.moveDown();
+        doc.fontSize(14).text('Property Owner Details:', { underline: true });
+        doc.fontSize(12).text(`Owner Name: ${tenant.propertyId.ownerName}`);
+        doc.text(`Property: ${tenant.propertyId.propertyName}`);
+        doc.text(`Address: ${tenant.propertyId.address}`);
+        doc.moveDown();
+        doc.fontSize(14).text('Payment Details:', { underline: true });
+        doc.fontSize(12).text(`Amount Paid: ₹${parseInt(amount).toLocaleString('en-IN')}`);
         doc.text(`Payment Method: Razorpay`);
+        doc.text(`Month: ${savedPayment.month} ${savedPayment.year}`);
         doc.text(`Description: Online rent payment via Razorpay`);
+        doc.moveDown();
+        doc.fontSize(10).text('This is a computer generated receipt.', { align: 'center' });
         doc.end();
         writeStream.on('finish', () => {
             const receiptUrl = `http://localhost:5000/receipts/${receiptName}`;
@@ -267,6 +295,127 @@ router.post('/razorpay/verify', authenticateToken, async (req, res) => {
         });
     } catch (err) {
         res.status(500).json({ message: 'Failed to verify payment' });
+    }
+});
+
+// ---------------------
+// ✅ GET /api/payments/payment-options - Get payment options (QR, UPI, etc.)
+// ---------------------
+router.get('/payment-options', authenticateToken, async (req, res) => {
+    try {
+        // In a real app, these would come from environment variables or database
+        const paymentOptions = {
+            qrCode: 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=upi://pay?pa=rentapp@okicici&pn=RentApp&am=',
+            upiId: 'rentapp@okicici',
+            bankDetails: {
+                accountNumber: '1234567890',
+                ifscCode: 'ICIC0001234',
+                bankName: 'ICICI Bank',
+                accountHolderName: 'RentApp Solutions Pvt Ltd',
+                branch: 'Mumbai Main Branch'
+            },
+            paymentMethods: ['UPI', 'Bank Transfer', 'Card Payment']
+        };
+        
+        res.status(200).json(paymentOptions);
+    } catch (error) {
+        console.error('Error fetching payment options:', error);
+        res.status(500).json({ message: 'Server error' });
+    }
+});
+
+// ---------------------
+// ✅ POST /api/payments/generate-monthly-payment - Generate monthly payment due (Admin only)
+// ---------------------
+router.post('/generate-monthly-payment', authenticateToken, isAdmin, async (req, res) => {
+    try {
+        const { month, year } = req.body;
+        const currentMonth = month || new Date().toLocaleString('default', { month: 'long' });
+        const currentYear = year || new Date().getFullYear();
+
+        // Get all active tenants
+        const tenants = await Tenant.find({ status: 'active' }).populate('propertyId');
+        
+        const paymentsCreated = [];
+
+        for (const tenant of tenants) {
+            // Check if payment for this month already exists
+            const existingPayment = await RentPayment.findOne({
+                tenantId: tenant._id,
+                month: currentMonth,
+                year: currentYear
+            });
+
+            if (!existingPayment) {
+                const payment = new RentPayment({
+                    tenantId: tenant._id,
+                    propertyId: tenant.propertyId._id,
+                    amount: tenant.rentAmount,
+                    paymentDate: new Date(),
+                    paymentMethod: 'pending',
+                    status: 'pending',
+                    description: `Monthly rent for ${currentMonth} ${currentYear}`,
+                    month: currentMonth,
+                    year: currentYear
+                });
+
+                const savedPayment = await payment.save();
+                paymentsCreated.push({
+                    tenantName: `${tenant.firstName} ${tenant.lastName}`,
+                    apartmentNumber: tenant.apartmentNumber,
+                    amount: tenant.rentAmount,
+                    paymentId: savedPayment._id
+                });
+            }
+        }
+
+        res.status(200).json({
+            message: `Generated ${paymentsCreated.length} monthly payments`,
+            paymentsCreated
+        });
+    } catch (error) {
+        console.error('Error generating monthly payments:', error);
+        res.status(500).json({ message: 'Server error' });
+    }
+});
+
+// ---------------------
+// ✅ GET /api/payments/monthly-due - Get monthly payment dues for current user
+// ---------------------
+router.get('/monthly-due', authenticateToken, async (req, res) => {
+    try {
+        const userEmail = req.user.email;
+        const tenant = await Tenant.findOne({ email: userEmail }).populate('propertyId');
+        
+        if (!tenant) {
+            return res.status(404).json({ message: 'Tenant not found' });
+        }
+
+        const currentMonth = new Date().toLocaleString('default', { month: 'long' });
+        const currentYear = new Date().getFullYear();
+
+        const monthlyPayment = await RentPayment.findOne({
+            tenantId: tenant._id,
+            month: currentMonth,
+            year: currentYear
+        });
+
+        if (!monthlyPayment) {
+            return res.status(404).json({ message: 'No monthly payment found for current month' });
+        }
+
+        res.status(200).json({
+            payment: monthlyPayment,
+            tenant: {
+                name: `${tenant.firstName} ${tenant.lastName}`,
+                apartmentNumber: tenant.apartmentNumber,
+                propertyName: tenant.propertyId.propertyName,
+                ownerName: tenant.propertyId.ownerName
+            }
+        });
+    } catch (error) {
+        console.error('Error fetching monthly due:', error);
+        res.status(500).json({ message: 'Server error' });
     }
 });
 

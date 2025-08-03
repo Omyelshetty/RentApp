@@ -111,7 +111,7 @@ const Login = () => {
                     <p className="text-sm text-gray-400">
                         Demo Accounts:
                     </p>
-                    <div className="mt-2 text-xs text-gray-500 space-y-1">
+                    <div className="mt-4 text-xs text-gray-500 space-y-1">
                         <p><strong>Admin:</strong> admin@rentapp.com / admin123</p>
                         <p><strong>User:</strong> user@rentapp.com / user123</p>
                     </div>

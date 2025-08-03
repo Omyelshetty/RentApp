@@ -4,8 +4,10 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 
 // Pages
 import Login from './auth/Login.jsx';
+import Register from './auth/Register.jsx';
 import Dashboard from './admin/Dashboard.jsx';
 import UserDashboard from './user/UserDashboard.jsx';
+import PaymentOptions from './user/PaymentOptions.jsx';
 import ProtectedRoute from './auth/ProtectedRoute.jsx';
 
 // Admin Components
@@ -22,6 +24,9 @@ const App = () => {
       <Routes>
         {/* Login should be the landing page */}
         <Route path="/" element={<Login />} />
+        <Route path="/login" element={<Login />} />
+        {/* Remove or comment out the register route */}
+        {/* <Route path="/register" element={<Register />} /> */}
 
         {/* Admin Routes */}
         <Route
@@ -111,6 +116,14 @@ const App = () => {
           element={
             <ProtectedRoute allowedRoles={['user']}>
               <UserDashboard />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/user/payment-options"
+          element={
+            <ProtectedRoute allowedRoles={['user']}>
+              <PaymentOptions />
             </ProtectedRoute>
           }
         />

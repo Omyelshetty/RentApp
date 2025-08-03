@@ -7,6 +7,11 @@ const rentPaymentSchema = new mongoose.Schema({
         ref: 'Tenant',
         required: true,
     },
+    propertyId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Property',
+        required: true,
+    },
     amount: {
         type: Number,
         required: true,
@@ -14,7 +19,7 @@ const rentPaymentSchema = new mongoose.Schema({
     },
     paymentMethod: {
         type: String,
-        enum: ['cash', 'card', 'bank_transfer', 'check'],
+        enum: ['cash', 'card', 'bank_transfer', 'check', 'pending', 'razorpay', 'upi'],
         required: true,
     },
     paymentDate: {

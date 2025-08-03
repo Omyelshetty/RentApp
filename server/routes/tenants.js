@@ -15,13 +15,14 @@ router.post('/', authenticateToken, isAdmin, async (req, res) => {
             phone,
             apartmentNumber,
             rentAmount,
+            propertyId,
             emergencyContact,
             documents,
             status = 'active'
         } = req.body;
 
         // Validate required fields
-        if (!firstName || !lastName || !email || !apartmentNumber || !rentAmount) {
+        if (!firstName || !lastName || !email || !apartmentNumber || !rentAmount || !propertyId) {
             return res.status(400).json({ message: 'Missing required fields' });
         }
 
@@ -44,6 +45,7 @@ router.post('/', authenticateToken, isAdmin, async (req, res) => {
             phone,
             apartmentNumber,
             rentAmount,
+            propertyId,
             emergencyContact,
             documents,
             status
@@ -54,7 +56,8 @@ router.post('/', authenticateToken, isAdmin, async (req, res) => {
         res.status(201).json(savedTenant);
     } catch (err) {
         console.error('Error adding tenant:', err);
-        res.status(500).json({ message: 'Server error' });
+        console.error('Request body:', req.body);
+        res.status(500).json({ message: 'Server error', details: err.message });
     }
 });
 

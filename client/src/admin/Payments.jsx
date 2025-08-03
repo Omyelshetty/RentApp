@@ -65,10 +65,29 @@ const Payments = () => {
 
     const handleAddPayment = async (e) => {
         e.preventDefault();
+
+        // Client-side validation
+        if (!newPayment.tenantId || !newPayment.amount || !newPayment.paymentDate || !newPayment.paymentMethod) {
+            alert('Please fill in all required fields');
+            return;
+        }
+
+        // Validate amount
+        if (newPayment.amount <= 0) {
+            alert('Amount must be greater than 0');
+            return;
+        }
+
         setLoading(true);
 
         try {
             const token = localStorage.getItem('token');
+            if (!token) {
+                alert('No authentication token found. Please login again.');
+                navigate('/login');
+                return;
+            }
+
             const response = await fetch('http://localhost:5000/api/payments', {
                 method: 'POST',
                 headers: {
@@ -78,25 +97,89 @@ const Payments = () => {
                 body: JSON.stringify(newPayment)
             });
 
-            const data = await response.json();
-
-            if (response.ok) {
-                alert('Payment added successfully!');
-                setShowAddPayment(false);
-                setNewPayment({
-                    tenantId: '',
-                    amount: '',
-                    paymentDate: '',
-                    paymentMethod: 'cash',
-                    description: ''
-                });
-                fetchPayments();
-            } else {
-                alert(data.message || 'Failed to add payment');
+            if (!response.ok) {
+                const errorText = await response.text();
+                let errorMessage = 'Failed to add payment';
+                try {
+                    const errorData = JSON.parse(errorText);
+                    errorMessage = errorData.message || errorMessage;
+                    if (errorData.details) {
+                        console.error('Server error details:', errorData.details);
+                    }
+                } catch (parseError) {
+                    console.error('Error parsing response:', errorText);
+                }
+                alert(errorMessage);
+                return;
             }
+
+            const data = await response.json();
+            alert('Payment added successfully!');
+            setShowAddPayment(false);
+            setNewPayment({
+                tenantId: '',
+                amount: '',
+                paymentDate: '',
+                paymentMethod: 'cash',
+                description: ''
+            });
+            fetchPayments();
         } catch (error) {
             console.error('Error adding payment:', error);
             alert('An error occurred while adding the payment');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleGenerateMonthlyPayments = async () => {
+        if (!confirm('This will generate monthly payments for all active tenants. Continue?')) {
+            return;
+        }
+
+        setLoading(true);
+        try {
+            const token = localStorage.getItem('token');
+            if (!token) {
+                alert('No authentication token found. Please login again.');
+                navigate('/login');
+                return;
+            }
+
+            const response = await fetch('http://localhost:5000/api/payments/generate-monthly-payment', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({
+                    month: new Date().toLocaleString('default', { month: 'long' }),
+                    year: new Date().getFullYear()
+                })
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                let errorMessage = 'Failed to generate monthly payments';
+                try {
+                    const errorData = JSON.parse(errorText);
+                    errorMessage = errorData.message || errorMessage;
+                    if (errorData.details) {
+                        console.error('Server error details:', errorData.details);
+                    }
+                } catch (parseError) {
+                    console.error('Error parsing response:', errorText);
+                }
+                alert(errorMessage);
+                return;
+            }
+
+            const data = await response.json();
+            alert(data.message);
+            fetchPayments();
+        } catch (error) {
+            console.error('Error generating monthly payments:', error);
+            alert('An error occurred while generating monthly payments');
         } finally {
             setLoading(false);
         }
@@ -180,6 +263,12 @@ const Payments = () => {
                             <h1 className="text-2xl font-bold text-gray-900">Payment Management</h1>
                         </div>
                         <div className="flex items-center space-x-4">
+                            <button
+                                onClick={handleGenerateMonthlyPayments}
+                                className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+                            >
+                                Generate Monthly Payments
+                            </button>
                             <button
                                 onClick={() => setShowAddPayment(true)}
                                 className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
