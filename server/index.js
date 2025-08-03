@@ -32,15 +32,19 @@ app.use('/receipts', express.static('./pdf'));
 
 // Connect DB and start server
 mongoose.connect(process.env.MONGO_URI, {
-    useNewUrlParser: true,
-    useUnifiedTopology: true
+    serverSelectionTimeoutMS: 5000, // Fail fast if can't connect
+    socketTimeoutMS: 45000, // Close sockets after 45 seconds of inactivity
 })
     .then(() => {
-        console.log('MongoDB connected');
-        app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+        console.log('✅ MongoDB connected successfully');
+        app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
     })
     .catch(err => {
-        console.error('Connection error:', err);
+        console.error('❌ MongoDB connection failed:', err.message);
         console.log('⚠️  Starting server without database connection for testing...');
-        app.listen(PORT, () => console.log(`Server running on port ${PORT} (NO DATABASE)`));
+        console.log('📋 Please fix MongoDB Atlas IP whitelist:');
+        console.log('   1. Go to https://cloud.mongodb.com/');
+        console.log('   2. Network Access → Add IP Address');
+        console.log('   3. Add: 54.197.218.84 or 0.0.0.0/0');
+        app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT} (⚠️  NO DATABASE)`));
     });

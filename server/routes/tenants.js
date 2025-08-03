@@ -2,8 +2,18 @@ import express from 'express';
 import Tenant from '../models/Tenant.js';
 import User from '../models/User.js';
 import { authenticateToken, isAdmin } from '../middleware/authMiddleware.js';
+import mongoose from 'mongoose'; // Added for health check
 
 const router = express.Router();
+
+// Health check route (no database required)
+router.get('/health', (req, res) => {
+    res.status(200).json({ 
+        message: 'Tenant service is running',
+        timestamp: new Date().toISOString(),
+        database: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected'
+    });
+});
 
 // ✅ Add new tenant (admin only)
 router.post('/', authenticateToken, isAdmin, async (req, res) => {
@@ -83,6 +93,15 @@ router.post('/', authenticateToken, isAdmin, async (req, res) => {
     } catch (err) {
         console.error('Error adding tenant:', err);
         console.error('Request body:', req.body);
+        
+        // Handle specific database connection errors
+        if (err.name === 'MongooseServerSelectionError' || err.message.includes('buffering timed out')) {
+            return res.status(500).json({ 
+                message: 'Database connection failed', 
+                details: 'Cannot connect to MongoDB. Please check database configuration.',
+                errorType: 'DATABASE_CONNECTION_ERROR'
+            });
+        }
         
         // Handle Mongoose validation errors
         if (err.name === 'ValidationError') {
