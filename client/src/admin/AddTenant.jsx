@@ -64,10 +64,22 @@ const AddTenant = () => {
                 }
             }));
         } else {
-            setFormData(prev => ({
-                ...prev,
-                [name]: value
-            }));
+            // Special handling for rentAmount to ensure it's a valid number
+            if (name === 'rentAmount') {
+                // Only allow positive numbers and prevent invalid values
+                const numValue = value === '' ? '' : parseFloat(value);
+                if (value === '' || (!isNaN(numValue) && numValue >= 0)) {
+                    setFormData(prev => ({
+                        ...prev,
+                        [name]: value
+                    }));
+                }
+            } else {
+                setFormData(prev => ({
+                    ...prev,
+                    [name]: value
+                }));
+            }
         }
     };
 
@@ -89,8 +101,9 @@ const AddTenant = () => {
         }
 
         // Validate rent amount
-        if (formData.rentAmount <= 0) {
-            alert('Rent amount must be greater than 0');
+        const rentAmountNum = parseFloat(formData.rentAmount);
+        if (isNaN(rentAmountNum) || rentAmountNum <= 0) {
+            alert('Rent amount must be a valid positive number');
             return;
         }
 
@@ -103,13 +116,19 @@ const AddTenant = () => {
                 return;
             }
 
+            // Prepare form data with proper number conversion for rentAmount
+            const submitData = {
+                ...formData,
+                rentAmount: rentAmountNum
+            };
+
             const response = await fetch('http://localhost:5000/api/tenants', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${token}`
                 },
-                body: JSON.stringify(formData)
+                body: JSON.stringify(submitData)
             });
 
             if (!response.ok) {
@@ -309,7 +328,6 @@ const AddTenant = () => {
                                         onChange={handleChange}
                                         required
                                         min="0"
-                                        step="100"
                                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                                         placeholder="Enter rent amount in INR"
                                     />

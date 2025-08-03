@@ -21,30 +21,55 @@ router.post('/', authenticateToken, isAdmin, async (req, res) => {
             status = 'active'
         } = req.body;
 
+        console.log('Received tenant data:', req.body);
+
         // Validate required fields
         if (!firstName || !lastName || !email || !apartmentNumber || !rentAmount || !propertyId) {
+            console.log('Missing required fields:', {
+                firstName: !!firstName,
+                lastName: !!lastName,
+                email: !!email,
+                apartmentNumber: !!apartmentNumber,
+                rentAmount: !!rentAmount,
+                propertyId: !!propertyId
+            });
             return res.status(400).json({ message: 'Missing required fields' });
+        }
+
+        // Validate rent amount is a positive number
+        const rentAmountNum = parseFloat(rentAmount);
+        if (isNaN(rentAmountNum) || rentAmountNum <= 0) {
+            console.log('Invalid rent amount:', rentAmount);
+            return res.status(400).json({ message: 'Rent amount must be a valid positive number' });
+        }
+
+        // Validate email format
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(email)) {
+            console.log('Invalid email format:', email);
+            return res.status(400).json({ message: 'Invalid email format' });
         }
 
         // Check if tenant already exists with same email or apartment
         const existingTenant = await Tenant.findOne({
             $or: [
-                { email: email },
+                { email: email.toLowerCase() },
                 { apartmentNumber: apartmentNumber }
             ]
         });
 
         if (existingTenant) {
+            console.log('Tenant already exists:', existingTenant.email, existingTenant.apartmentNumber);
             return res.status(400).json({ message: 'Tenant with this email or apartment number already exists' });
         }
 
         const tenant = new Tenant({
-            firstName,
-            lastName,
-            email,
-            phone,
-            apartmentNumber,
-            rentAmount,
+            firstName: firstName.trim(),
+            lastName: lastName.trim(),
+            email: email.toLowerCase().trim(),
+            phone: phone.trim(),
+            apartmentNumber: apartmentNumber.trim(),
+            rentAmount: rentAmountNum,
             propertyId,
             emergencyContact,
             documents,
@@ -52,11 +77,25 @@ router.post('/', authenticateToken, isAdmin, async (req, res) => {
         });
 
         const savedTenant = await tenant.save();
+        console.log('Tenant saved successfully:', savedTenant._id);
 
         res.status(201).json(savedTenant);
     } catch (err) {
         console.error('Error adding tenant:', err);
         console.error('Request body:', req.body);
+        
+        // Handle Mongoose validation errors
+        if (err.name === 'ValidationError') {
+            const errors = Object.values(err.errors).map(e => e.message);
+            return res.status(400).json({ message: 'Validation error', details: errors });
+        }
+        
+        // Handle duplicate key errors
+        if (err.code === 11000) {
+            const field = Object.keys(err.keyPattern)[0];
+            return res.status(400).json({ message: `${field} already exists` });
+        }
+        
         res.status(500).json({ message: 'Server error', details: err.message });
     }
 });
@@ -89,6 +128,30 @@ router.get('/:id', authenticateToken, isAdmin, async (req, res) => {
 // ✅ Update tenant (admin only)
 router.put('/:id', authenticateToken, isAdmin, async (req, res) => {
     try {
+        console.log('Updating tenant with data:', req.body);
+
+        // If rent amount is being updated, validate it
+        if (req.body.rentAmount !== undefined) {
+            const rentAmountNum = parseFloat(req.body.rentAmount);
+            if (isNaN(rentAmountNum) || rentAmountNum <= 0) {
+                console.log('Invalid rent amount in update:', req.body.rentAmount);
+                return res.status(400).json({ message: 'Rent amount must be a valid positive number' });
+            }
+            req.body.rentAmount = rentAmountNum;
+        }
+
+        // Normalize email if being updated
+        if (req.body.email) {
+            req.body.email = req.body.email.toLowerCase().trim();
+        }
+
+        // Trim string fields if being updated
+        ['firstName', 'lastName', 'phone', 'apartmentNumber'].forEach(field => {
+            if (req.body[field]) {
+                req.body[field] = req.body[field].trim();
+            }
+        });
+
         const updated = await Tenant.findByIdAndUpdate(
             req.params.id,
             req.body,
@@ -97,10 +160,24 @@ router.put('/:id', authenticateToken, isAdmin, async (req, res) => {
         if (!updated) {
             return res.status(404).json({ message: 'Tenant not found' });
         }
+        console.log('Tenant updated successfully:', updated._id);
         res.status(200).json(updated);
     } catch (err) {
         console.error('Error updating tenant:', err);
-        res.status(500).json({ message: 'Server error' });
+        
+        // Handle Mongoose validation errors
+        if (err.name === 'ValidationError') {
+            const errors = Object.values(err.errors).map(e => e.message);
+            return res.status(400).json({ message: 'Validation error', details: errors });
+        }
+        
+        // Handle duplicate key errors
+        if (err.code === 11000) {
+            const field = Object.keys(err.keyPattern)[0];
+            return res.status(400).json({ message: `${field} already exists` });
+        }
+        
+        res.status(500).json({ message: 'Server error', details: err.message });
     }
 });
 

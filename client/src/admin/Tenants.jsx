@@ -77,11 +77,31 @@ const Tenants = () => {
                 }
             }));
         } else {
-            setEditForm(prev => ({ ...prev, [name]: value }));
+            // Special handling for rentAmount to ensure it's a valid number
+            if (name === 'rentAmount') {
+                // Only allow positive numbers and prevent invalid values
+                const numValue = value === '' ? '' : parseFloat(value);
+                if (value === '' || (!isNaN(numValue) && numValue >= 0)) {
+                    setEditForm(prev => ({ ...prev, [name]: value }));
+                }
+            } else {
+                setEditForm(prev => ({ ...prev, [name]: value }));
+            }
         }
     };
     const handleEditSave = async () => {
         try {
+            // Validate rent amount if it exists
+            if (editForm.rentAmount) {
+                const rentAmountNum = parseFloat(editForm.rentAmount);
+                if (isNaN(rentAmountNum) || rentAmountNum <= 0) {
+                    alert('Rent amount must be a valid positive number');
+                    return;
+                }
+                // Convert rent amount to number for submission
+                editForm.rentAmount = rentAmountNum;
+            }
+
             const token = localStorage.getItem('token');
             const response = await fetch(`http://localhost:5000/api/tenants/${editTenant._id}`, {
                 method: 'PUT',
@@ -101,6 +121,7 @@ const Tenants = () => {
                 alert(data.message || 'Failed to update tenant');
             }
         } catch (error) {
+            console.error('Error updating tenant:', error);
             alert('An error occurred while updating the tenant');
         }
     };

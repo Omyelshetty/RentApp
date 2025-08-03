@@ -39,10 +39,22 @@ const RegisterUser = () => {
                 }
             }));
         } else {
-            setFormData(prev => ({
-                ...prev,
-                [name]: value
-            }));
+            // Special handling for rentAmount to ensure it's a valid number
+            if (name === 'rentAmount') {
+                // Only allow positive numbers and prevent invalid values
+                const numValue = value === '' ? '' : parseFloat(value);
+                if (value === '' || (!isNaN(numValue) && numValue >= 0)) {
+                    setFormData(prev => ({
+                        ...prev,
+                        [name]: value
+                    }));
+                }
+            } else {
+                setFormData(prev => ({
+                    ...prev,
+                    [name]: value
+                }));
+            }
         }
     };
 
@@ -57,6 +69,16 @@ const RegisterUser = () => {
             alert('Password must be at least 6 characters long!');
             return;
         }
+
+        // Validate rent amount if provided
+        if (formData.rentAmount) {
+            const rentAmountNum = parseFloat(formData.rentAmount);
+            if (isNaN(rentAmountNum) || rentAmountNum <= 0) {
+                alert('Rent amount must be a valid positive number');
+                return;
+            }
+        }
+
         setLoading(true);
         try {
             const token = localStorage.getItem('token');
@@ -74,7 +96,7 @@ const RegisterUser = () => {
                     phone: formData.phone,
                     address: formData.address,
                     apartmentNumber: formData.apartmentNumber,
-                    rentAmount: formData.rentAmount,
+                    rentAmount: formData.rentAmount ? parseFloat(formData.rentAmount) : null,
                     emergencyContact: formData.emergencyContact,
                     documents: formData.documents
                 })
@@ -246,7 +268,6 @@ const RegisterUser = () => {
                                         onChange={handleChange}
                                         required
                                         min="0"
-                                        step="100"
                                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                                         placeholder="Enter rent amount in INR"
                                     />
