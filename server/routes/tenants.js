@@ -2,12 +2,30 @@ import express from 'express';
 import Tenant from '../models/Tenant.js';
 import User from '../models/User.js';
 import { authenticateToken, isAdmin } from '../middleware/authMiddleware.js';
+import mongoose from 'mongoose'; // Added for database connection check
 
 const router = express.Router();
+
+// Health check route (no database required)
+router.get('/health', (req, res) => {
+    res.status(200).json({
+        message: 'Tenant service is running',
+        timestamp: new Date().toISOString(),
+        database: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected'
+    });
+});
 
 // ✅ Add new tenant (admin only)
 router.post('/', authenticateToken, isAdmin, async (req, res) => {
     try {
+        // Check if database is connected
+        if (mongoose.connection.readyState !== 1) {
+            console.error('Database not connected. ReadyState:', mongoose.connection.readyState);
+            return res.status(503).json({
+                message: 'Database connection unavailable. Please try again in a few moments.'
+            });
+        }
+
         const {
             firstName,
             lastName,
@@ -16,47 +34,124 @@ router.post('/', authenticateToken, isAdmin, async (req, res) => {
             apartmentNumber,
             rentAmount,
             propertyId,
-            emergencyContact,
             documents,
             status = 'active'
         } = req.body;
 
+        console.log('Received tenant data:', req.body);
+
         // Validate required fields
         if (!firstName || !lastName || !email || !apartmentNumber || !rentAmount || !propertyId) {
+            console.log('Missing required fields:', {
+                firstName: !!firstName,
+                lastName: !!lastName,
+                email: !!email,
+                apartmentNumber: !!apartmentNumber,
+                rentAmount: !!rentAmount,
+                propertyId: !!propertyId
+            });
             return res.status(400).json({ message: 'Missing required fields' });
+        }
+
+        // Validate rent amount is a positive number
+        const rentAmountNum = parseFloat(rentAmount);
+        if (isNaN(rentAmountNum) || rentAmountNum <= 0) {
+            console.log('Invalid rent amount:', rentAmount);
+            return res.status(400).json({ message: 'Rent amount must be a valid positive number' });
+        }
+
+        // Validate email format
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(email)) {
+            console.log('Invalid email format:', email);
+            return res.status(400).json({ message: 'Invalid email format' });
+        }
+
+        // Clean up documents field - only include if not empty
+        let cleanDocuments = {};
+        if (documents && typeof documents === 'object' && documents.idProof) {
+            const idProof = documents.idProof.trim();
+            if (idProof !== '') {
+                cleanDocuments.idProof = idProof;
+            }
         }
 
         // Check if tenant already exists with same email or apartment
         const existingTenant = await Tenant.findOne({
             $or: [
-                { email: email },
+                { email: email.toLowerCase() },
                 { apartmentNumber: apartmentNumber }
             ]
         });
 
         if (existingTenant) {
-            return res.status(400).json({ message: 'Tenant with this email or apartment number already exists' });
+            console.log('Tenant already exists:', existingTenant.email, existingTenant.apartmentNumber);
+            if (existingTenant.email.toLowerCase() === email.toLowerCase()) {
+                return res.status(400).json({ message: 'A tenant with this email already exists' });
+            } else {
+                return res.status(400).json({ message: 'A tenant with this apartment number already exists' });
+            }
         }
 
-        const tenant = new Tenant({
-            firstName,
-            lastName,
-            email,
-            phone,
-            apartmentNumber,
-            rentAmount,
+        // Create tenant object without documents if empty
+        const tenantData = {
+            firstName: firstName.trim(),
+            lastName: lastName.trim(),
+            email: email.toLowerCase().trim(),
+            phone: phone.trim(),
+            apartmentNumber: apartmentNumber.trim(),
+            rentAmount: rentAmountNum,
             propertyId,
-            emergencyContact,
-            documents,
             status
-        });
+        };
+
+        // Only add documents if it has content
+        if (Object.keys(cleanDocuments).length > 0) {
+            tenantData.documents = cleanDocuments;
+        }
+
+        const tenant = new Tenant(tenantData);
 
         const savedTenant = await tenant.save();
+        console.log('Tenant saved successfully:', savedTenant._id);
 
         res.status(201).json(savedTenant);
     } catch (err) {
         console.error('Error adding tenant:', err);
         console.error('Request body:', req.body);
+
+        // Handle Mongoose validation errors
+        if (err.name === 'ValidationError') {
+            const errors = Object.values(err.errors).map(e => e.message);
+            return res.status(400).json({ message: 'Validation error', details: errors });
+        }
+
+        // Handle duplicate key errors
+        if (err.code === 11000) {
+            const field = Object.keys(err.keyPattern)[0];
+            let errorMessage = `${field} already exists`;
+
+            // Provide more specific error messages
+            if (field === 'email') {
+                errorMessage = 'A tenant with this email already exists';
+            } else if (field === 'apartmentNumber') {
+                errorMessage = 'A tenant with this apartment number already exists';
+            } else if (field === 'documents.idProof') {
+                errorMessage = 'A tenant with this ID proof number already exists';
+            } else if (field === 'aadhaarNumber' || field === 'aadharNumber') {
+                errorMessage = 'A tenant with this Aadhar number already exists';
+            }
+
+            return res.status(400).json({ message: errorMessage });
+        }
+
+        // Handle database connection errors
+        if (err.name === 'MongooseServerSelectionError' || err.name === 'MongoNetworkError') {
+            return res.status(503).json({
+                message: 'Database connection error. Please try again in a few moments.'
+            });
+        }
+
         res.status(500).json({ message: 'Server error', details: err.message });
     }
 });
@@ -89,6 +184,30 @@ router.get('/:id', authenticateToken, isAdmin, async (req, res) => {
 // ✅ Update tenant (admin only)
 router.put('/:id', authenticateToken, isAdmin, async (req, res) => {
     try {
+        console.log('Updating tenant with data:', req.body);
+
+        // If rent amount is being updated, validate it
+        if (req.body.rentAmount !== undefined) {
+            const rentAmountNum = parseFloat(req.body.rentAmount);
+            if (isNaN(rentAmountNum) || rentAmountNum <= 0) {
+                console.log('Invalid rent amount in update:', req.body.rentAmount);
+                return res.status(400).json({ message: 'Rent amount must be a valid positive number' });
+            }
+            req.body.rentAmount = rentAmountNum;
+        }
+
+        // Normalize email if being updated
+        if (req.body.email) {
+            req.body.email = req.body.email.toLowerCase().trim();
+        }
+
+        // Trim string fields if being updated
+        ['firstName', 'lastName', 'phone', 'apartmentNumber'].forEach(field => {
+            if (req.body[field]) {
+                req.body[field] = req.body[field].trim();
+            }
+        });
+
         const updated = await Tenant.findByIdAndUpdate(
             req.params.id,
             req.body,
@@ -97,10 +216,24 @@ router.put('/:id', authenticateToken, isAdmin, async (req, res) => {
         if (!updated) {
             return res.status(404).json({ message: 'Tenant not found' });
         }
+        console.log('Tenant updated successfully:', updated._id);
         res.status(200).json(updated);
     } catch (err) {
         console.error('Error updating tenant:', err);
-        res.status(500).json({ message: 'Server error' });
+
+        // Handle Mongoose validation errors
+        if (err.name === 'ValidationError') {
+            const errors = Object.values(err.errors).map(e => e.message);
+            return res.status(400).json({ message: 'Validation error', details: errors });
+        }
+
+        // Handle duplicate key errors
+        if (err.code === 11000) {
+            const field = Object.keys(err.keyPattern)[0];
+            return res.status(400).json({ message: `${field} already exists` });
+        }
+
+        res.status(500).json({ message: 'Server error', details: err.message });
     }
 });
 

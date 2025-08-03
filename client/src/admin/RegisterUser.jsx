@@ -16,14 +16,8 @@ const RegisterUser = () => {
         address: '',
         apartmentNumber: '',
         rentAmount: '',
-        emergencyContact: {
-            name: '',
-            phone: '',
-            relationship: ''
-        },
         documents: {
-            idProof: '',
-            otherDocuments: ''
+            idProof: ''
         }
     });
 
@@ -39,10 +33,22 @@ const RegisterUser = () => {
                 }
             }));
         } else {
-            setFormData(prev => ({
-                ...prev,
-                [name]: value
-            }));
+            // Special handling for rentAmount to ensure it's a valid number
+            if (name === 'rentAmount') {
+                // Only allow positive numbers and prevent invalid values
+                const numValue = value === '' ? '' : parseFloat(value);
+                if (value === '' || (!isNaN(numValue) && numValue >= 0)) {
+                    setFormData(prev => ({
+                        ...prev,
+                        [name]: value
+                    }));
+                }
+            } else {
+                setFormData(prev => ({
+                    ...prev,
+                    [name]: value
+                }));
+            }
         }
     };
 
@@ -57,6 +63,16 @@ const RegisterUser = () => {
             alert('Password must be at least 6 characters long!');
             return;
         }
+
+        // Validate rent amount if provided
+        if (formData.rentAmount) {
+            const rentAmountNum = parseFloat(formData.rentAmount);
+            if (isNaN(rentAmountNum) || rentAmountNum <= 0) {
+                alert('Rent amount must be a valid positive number');
+                return;
+            }
+        }
+
         setLoading(true);
         try {
             const token = localStorage.getItem('token');
@@ -74,8 +90,7 @@ const RegisterUser = () => {
                     phone: formData.phone,
                     address: formData.address,
                     apartmentNumber: formData.apartmentNumber,
-                    rentAmount: formData.rentAmount,
-                    emergencyContact: formData.emergencyContact,
+                    rentAmount: formData.rentAmount ? parseFloat(formData.rentAmount) : null,
                     documents: formData.documents
                 })
             });
@@ -246,7 +261,6 @@ const RegisterUser = () => {
                                         onChange={handleChange}
                                         required
                                         min="0"
-                                        step="100"
                                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                                         placeholder="Enter rent amount in INR"
                                     />
@@ -254,51 +268,7 @@ const RegisterUser = () => {
                             </div>
                         </div>
 
-                        {/* Emergency Contact */}
-                        <div>
-                            <h3 className="text-md font-medium text-gray-900 mb-4">Emergency Contact</h3>
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                                        Contact Name
-                                    </label>
-                                    <input
-                                        type="text"
-                                        name="emergencyContact.name"
-                                        value={formData.emergencyContact.name}
-                                        onChange={handleChange}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                        placeholder="Emergency contact name"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                                        Contact Phone
-                                    </label>
-                                    <input
-                                        type="tel"
-                                        name="emergencyContact.phone"
-                                        value={formData.emergencyContact.phone}
-                                        onChange={handleChange}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                        placeholder="Emergency contact phone"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                                        Relationship
-                                    </label>
-                                    <input
-                                        type="text"
-                                        name="emergencyContact.relationship"
-                                        value={formData.emergencyContact.relationship}
-                                        onChange={handleChange}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                        placeholder="e.g., Spouse, Parent, Friend"
-                                    />
-                                </div>
-                            </div>
-                        </div>
+
 
                         {/* Document Information */}
                         <div>
@@ -317,19 +287,7 @@ const RegisterUser = () => {
                                         placeholder="Aadhar, PAN, Driving License, etc."
                                     />
                                 </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                                        Other Documents
-                                    </label>
-                                    <input
-                                        type="text"
-                                        name="documents.otherDocuments"
-                                        value={formData.documents.otherDocuments}
-                                        onChange={handleChange}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                        placeholder="Additional documents"
-                                    />
-                                </div>
+
                             </div>
                         </div>
 

@@ -9,6 +9,7 @@ import Property from '../models/Property.js';
 import { authenticateToken, isAdmin } from '../middleware/authMiddleware.js';
 import Razorpay from 'razorpay';
 import crypto from 'crypto';
+import mongoose from 'mongoose';
 
 const router = express.Router();
 
@@ -329,53 +330,100 @@ router.get('/payment-options', authenticateToken, async (req, res) => {
 // ---------------------
 router.post('/generate-monthly-payment', authenticateToken, isAdmin, async (req, res) => {
     try {
+        // Check if database is connected
+        if (mongoose.connection.readyState !== 1) {
+            console.error('Database not connected. ReadyState:', mongoose.connection.readyState);
+            return res.status(503).json({ 
+                message: 'Database connection unavailable. Please try again in a few moments.' 
+            });
+        }
+
         const { month, year } = req.body;
         const currentMonth = month || new Date().toLocaleString('default', { month: 'long' });
         const currentYear = year || new Date().getFullYear();
 
+        console.log(`Generating payments for ${currentMonth} ${currentYear}`);
+
         // Get all active tenants
         const tenants = await Tenant.find({ status: 'active' }).populate('propertyId');
         
+        if (tenants.length === 0) {
+            return res.status(404).json({ message: 'No active tenants found' });
+        }
+
+        console.log(`Found ${tenants.length} active tenants`);
+        
         const paymentsCreated = [];
+        const errors = [];
 
         for (const tenant of tenants) {
-            // Check if payment for this month already exists
-            const existingPayment = await RentPayment.findOne({
-                tenantId: tenant._id,
-                month: currentMonth,
-                year: currentYear
-            });
-
-            if (!existingPayment) {
-                const payment = new RentPayment({
+            try {
+                // Check if payment for this month already exists
+                const existingPayment = await RentPayment.findOne({
                     tenantId: tenant._id,
-                    propertyId: tenant.propertyId._id,
-                    amount: tenant.rentAmount,
-                    paymentDate: new Date(),
-                    paymentMethod: 'pending',
-                    status: 'pending',
-                    description: `Monthly rent for ${currentMonth} ${currentYear}`,
                     month: currentMonth,
                     year: currentYear
                 });
 
-                const savedPayment = await payment.save();
-                paymentsCreated.push({
+                if (!existingPayment) {
+                    const payment = new RentPayment({
+                        tenantId: tenant._id,
+                        propertyId: tenant.propertyId._id,
+                        amount: tenant.rentAmount,
+                        paymentDate: new Date(),
+                        paymentMethod: 'pending',
+                        status: 'pending',
+                        description: `Monthly rent for ${currentMonth} ${currentYear}`,
+                        month: currentMonth,
+                        year: currentYear
+                    });
+
+                    const savedPayment = await payment.save();
+                    paymentsCreated.push({
+                        tenantName: `${tenant.firstName} ${tenant.lastName}`,
+                        apartmentNumber: tenant.apartmentNumber,
+                        amount: tenant.rentAmount,
+                        paymentId: savedPayment._id
+                    });
+                    
+                    console.log(`Created payment for ${tenant.firstName} ${tenant.lastName}`);
+                } else {
+                    console.log(`Payment already exists for ${tenant.firstName} ${tenant.lastName}`);
+                }
+            } catch (error) {
+                console.error(`Error creating payment for tenant ${tenant.firstName} ${tenant.lastName}:`, error);
+                errors.push({
                     tenantName: `${tenant.firstName} ${tenant.lastName}`,
-                    apartmentNumber: tenant.apartmentNumber,
-                    amount: tenant.rentAmount,
-                    paymentId: savedPayment._id
+                    error: error.message
                 });
             }
         }
 
-        res.status(200).json({
+        const response = {
             message: `Generated ${paymentsCreated.length} monthly payments`,
-            paymentsCreated
-        });
+            paymentsCreated,
+            totalTenants: tenants.length,
+            month: currentMonth,
+            year: currentYear
+        };
+
+        if (errors.length > 0) {
+            response.errors = errors;
+            response.message += ` (${errors.length} errors occurred)`;
+        }
+
+        res.status(200).json(response);
     } catch (error) {
         console.error('Error generating monthly payments:', error);
-        res.status(500).json({ message: 'Server error' });
+        
+        // Handle database connection errors
+        if (error.name === 'MongooseServerSelectionError' || error.name === 'MongoNetworkError') {
+            return res.status(503).json({ 
+                message: 'Database connection error. Please try again in a few moments.' 
+            });
+        }
+        
+        res.status(500).json({ message: 'Server error', details: error.message });
     }
 });
 

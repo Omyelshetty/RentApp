@@ -6,7 +6,8 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "nodemon index.js",
-    "seed-properties": "node seedProperties.js"
+    "seed-properties": "node seedProperties.js",
+    "fix-indexes": "node fixIndexes.js"
   },
   "keywords": [],
   "author": "",
