@@ -41,4 +41,6 @@ mongoose.connect(process.env.MONGO_URI, {
     })
     .catch(err => {
         console.error('Connection error:', err);
+        console.log('⚠️  Starting server without database connection for testing...');
+        app.listen(PORT, () => console.log(`Server running on port ${PORT} (NO DATABASE)`));
     });
