@@ -30,21 +30,35 @@ app.use('/api/owners', ownersRoutes);
 // Serve PDF receipts
 app.use('/receipts', express.static('./pdf'));
 
+// Health check endpoint
+app.get('/api/health', (req, res) => {
+    res.json({
+        status: 'OK',
+        message: 'Server is running',
+        timestamp: new Date().toISOString()
+    });
+});
+
 // Connect DB and start server
-mongoose.connect(process.env.MONGO_URI, {
-    serverSelectionTimeoutMS: 5000, // Fail fast if can't connect
-    socketTimeoutMS: 45000, // Close sockets after 45 seconds of inactivity
-})
+const MONGODB_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/rentapp';
+
+mongoose.connect(MONGODB_URI)
     .then(() => {
         console.log('✅ MongoDB connected successfully');
-        app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
+        console.log(`🌐 Server running on port ${PORT}`);
+        console.log(`📊 Health check: http://localhost:${PORT}/api/health`);
     })
     .catch(err => {
-        console.error('❌ MongoDB connection failed:', err.message);
-        console.log('⚠️  Starting server without database connection for testing...');
-        console.log('📋 Please fix MongoDB Atlas IP whitelist:');
-        console.log('   1. Go to https://cloud.mongodb.com/');
-        console.log('   2. Network Access → Add IP Address');
-        console.log('   3. Add: 54.197.218.84 or 0.0.0.0/0');
-        app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT} (⚠️  NO DATABASE)`));
+        console.error('❌ MongoDB connection error:', err.message);
+        console.log('⚠️  Starting server without database connection...');
+        console.log('💡 To fix this:');
+        console.log('   1. Install MongoDB locally');
+        console.log('   2. Or use MongoDB Atlas (cloud)');
+        console.log('   3. Create a .env file with MONGO_URI');
+        console.log(`🌐 Server running on port ${PORT} (NO DATABASE)`);
+        console.log(`📊 Health check: http://localhost:${PORT}/api/health`);
     });
+
+app.listen(PORT, () => {
+    // Server is listening, but we'll log connection status above
+});

@@ -367,28 +367,11 @@ const Tenants = () => {
                                 <input type="number" name="rentAmount" value={editForm.rentAmount} onChange={handleEditChange} className="w-full px-3 py-2 border border-gray-300 rounded-md" />
                             </div>
                         </div>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Emergency Contact Name</label>
-                                <input type="text" name="emergencyContact.name" value={editForm.emergencyContact?.name || ''} onChange={handleEditChange} className="w-full px-3 py-2 border border-gray-300 rounded-md" />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Emergency Contact Phone</label>
-                                <input type="text" name="emergencyContact.phone" value={editForm.emergencyContact?.phone || ''} onChange={handleEditChange} className="w-full px-3 py-2 border border-gray-300 rounded-md" />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Relationship</label>
-                                <input type="text" name="emergencyContact.relationship" value={editForm.emergencyContact?.relationship || ''} onChange={handleEditChange} className="w-full px-3 py-2 border border-gray-300 rounded-md" />
-                            </div>
-                        </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+
+                        <div className="grid grid-cols-1 md:grid-cols-1 gap-4 mb-4">
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">ID Proof</label>
                                 <input type="text" name="documents.idProof" value={editForm.documents?.idProof || ''} onChange={handleEditChange} className="w-full px-3 py-2 border border-gray-300 rounded-md" />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Other Documents</label>
-                                <input type="text" name="documents.otherDocuments" value={editForm.documents?.otherDocuments || ''} onChange={handleEditChange} className="w-full px-3 py-2 border border-gray-300 rounded-md" />
                             </div>
                         </div>
                         <div className="flex justify-end space-x-4">
